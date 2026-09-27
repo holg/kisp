@@ -4,8 +4,6 @@ use std::rc::Rc;
 use crate::value::{EvalValue, ReferenceValue};
 use crate::value::error::{ErrorContext, EvalError};
 
-const MAX_STACK_DEPTH: usize = 420;
-
 pub type ScopeRef = Rc<Scope>;
 #[derive(Debug)]
 pub struct Scope {
@@ -30,13 +28,12 @@ impl Scope {
     }
 
     pub fn enter_with_vararg(self: &Rc<Self>, vararg: Vec<EvalValue>, origin: Option<Rc<ReferenceValue>>) -> Result<Rc<Self>, ErrorContext> {
-        if self.depth >= MAX_STACK_DEPTH {
-            Err(EvalError::StackOverflow.trace(self))
-        } else{
-            Ok(
-                Rc::new(Self{origin, depth: self.depth+1, parent: Some(self.clone()), entries: Default::default(), vararg})
-            )
-        }
+        // Recursion is bounded by interpreter::MAX_CALL_DEPTH (a call counter),
+        // not by the chain length: with lexical scoping a frame's parent is the
+        // defining scope, so the chain stays short however deep the recursion.
+        Ok(
+            Rc::new(Self{origin, depth: self.depth+1, parent: Some(self.clone()), entries: Default::default(), vararg})
+        )
     }
 
     pub fn lookup(&self, identifier: &String) -> Option<EvalValue> {

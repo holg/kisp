@@ -26,8 +26,10 @@ pub enum SExpression{
     Symbol(String),
     Number(Numeric),
     //DotExpression(Box<SExpression>,Box<SExpression>),
-    List(Vec<PosExpression>),
-    Block(Vec<PosExpression>),
+    // Rc so that cloning an expression (builtins receive their arguments as
+    // unevaluated expressions) is an Rc bump instead of a deep copy of the subtree.
+    List(std::rc::Rc<Vec<PosExpression>>),
+    Block(std::rc::Rc<Vec<PosExpression>>),
 }
 
 #[derive(Debug, Clone)]

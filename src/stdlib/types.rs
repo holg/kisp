@@ -85,15 +85,14 @@ fn is_function_callback(scope: &ScopeRef, _ctx: EvalContext, args: BuiltInFuncti
 pub fn std_types() -> Vec<BuiltinFunction> {
     vec![
         func("int", int_callback),
-        func("float", int_callback),
+        func("float", float_callback),
 
-        func("is-unit?", is_unit_callback),
         func("is-unit?", is_unit_callback),
         func("is-numeric?", is_numeric_callback),
         func("is-int?", is_int_callback),
         func("is-float?", is_float_callback),
-        func("is-unit?", is_unit_callback),
-        func("is_list?", is_list_callback),
+        func("is-list?", is_list_callback),
+        func("is_list?", is_list_callback), // kept for compatibility
         func("is-callable?", is_callable_callback),
         func("is-builtin?", is_builtin_callback),
         func("is-lambda?", is_lambda_callback),

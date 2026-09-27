@@ -25,7 +25,7 @@ fn parse_iter(stream: &mut TokenStream, acc: Vec<PosExpression>) -> Result<Vec<P
 pub fn parse(stream: &mut TokenStream) -> Result<PosExpression, ParserError> {
     let stack = parse_iter(stream, Vec::new())?;
     match stream.peek().unwrap() {
-        Token{value: TokenValue::EOF, ..} => Ok(PosExpression{exp: SExpression::Block(stack), cursor: Cursor::new()}),
+        Token{value: TokenValue::EOF, ..} => Ok(PosExpression{exp: SExpression::Block(std::rc::Rc::new(stack)), cursor: Cursor::new()}),
         Token{value: _, cursor} => Err(ParserError::NoMatchingParser(cursor.clone())),
     }
 }
@@ -70,14 +70,14 @@ fn parse_list_iter(stream: &mut TokenStream, acc: Vec<ast::PosExpression>) -> Re
 fn parse_list(stream: &mut TokenStream) -> ParserResult{
     match parse_listy(stream, TokenValue::ParenthesisOpen, TokenValue::ParenthesisClose)? {
         None => Ok(None),
-        Some((acc, cursor)) => Ok(Some(PosExpression{exp: ast::SExpression::List(acc), cursor})),
+        Some((acc, cursor)) => Ok(Some(PosExpression{exp: ast::SExpression::List(std::rc::Rc::new(acc)), cursor})),
     }
 }
 
 fn parse_block(stream: &mut TokenStream) -> ParserResult{
     match parse_listy(stream, TokenValue::BracketOpen, TokenValue::BracketClose)? {
         None => Ok(None),
-        Some((acc, cursor)) => Ok(Some(PosExpression{cursor, exp: ast::SExpression::Block(acc)})),
+        Some((acc, cursor)) => Ok(Some(PosExpression{cursor, exp: ast::SExpression::Block(std::rc::Rc::new(acc))})),
     }
 }
 

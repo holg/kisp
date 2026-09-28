@@ -6,6 +6,10 @@ use crate::value::error::ErrorContext;
 
 pub type ScopeRef = Rc<Scope>;
 
+thread_local! {
+    static FRAME_POOL: RefCell<Vec<Rc<Scope>>> = const { RefCell::new(Vec::new()) };
+}
+
 /// The bindings of one scope. The global scope holds every builtin and every
 /// top-level `let`/`fn`, so it is a table indexed by symbol id; a function frame
 /// holds a handful of arguments, so a linear scan over ids is faster than a map
@@ -42,9 +46,40 @@ impl Scope {
         // Recursion is bounded by interpreter::MAX_CALL_DEPTH (a call counter),
         // not by the chain length: with lexical scoping a frame's parent is the
         // defining scope, so the chain stays short however deep the recursion.
+        // Frames are recycled (see `release`), so a call in steady state
+        // allocates neither the Rc nor the entries vector.
+        let recycled = FRAME_POOL.with(|p| p.borrow_mut().pop());
+        if let Some(mut rc) = recycled {
+            if let Some(scope) = Rc::get_mut(&mut rc) {
+                scope.origin = origin;
+                scope.depth = self.depth + 1;
+                scope.parent = Some(self.clone());
+                scope.vararg = vararg;
+                return Ok(rc);
+            }
+        }
         Ok(
             Rc::new(Self{origin, depth: self.depth+1, parent: Some(self.clone()), entries: RefCell::new(Entries::Frame(Vec::with_capacity(4))), vararg})
         )
+    }
+
+    /// Give a finished frame back to the pool, unless a closure captured it.
+    pub fn release(mut rc: Rc<Self>) {
+        if let Some(scope) = Rc::get_mut(&mut rc) {
+            if !matches!(&*scope.entries.borrow(), Entries::Frame(_)) {
+                return;
+            }
+            scope.clear();
+            scope.origin = None;
+            scope.parent = None;
+            scope.vararg.clear();
+            FRAME_POOL.with(|p| {
+                let mut p = p.borrow_mut();
+                if p.len() < 64 {
+                    p.push(rc);
+                }
+            });
+        }
     }
 
     #[inline]

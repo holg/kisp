@@ -148,7 +148,9 @@ pub(crate) fn eval_with_args_flat(given_ctx: EvalContext, scope: &ScopeRef, pass
 pub(crate) fn eval_with_args(ctx: EvalContext, scope: &ScopeRef, passed_in: Vec<EvalValue>, arg_names: &Vec<Sym>, expression: &PosExpression, origin: Option<Rc<ReferenceValue>>) -> EvalResult {
     let _depth = CallDepthGuard::enter(scope)?;
     let func_scope = scope.enter(origin.clone())?;
-    eval_with_args_flat(ctx, &func_scope, passed_in, arg_names, expression, origin)
+    let result = eval_with_args_flat(ctx, &func_scope, passed_in, arg_names, expression, origin);
+    Scope::release(func_scope);
+    result
 }
 
 

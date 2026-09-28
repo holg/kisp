@@ -3,6 +3,7 @@ use std::iter::Peekable;
 use std::rc::Rc;
 use std::slice::Iter;
 use crate::ast::{PosExpression, SExpression};
+use crate::symbol::Sym;
 use crate::value::{EvalContext, EvalResult, EvalValue, ReferenceValue};
 
 
@@ -58,10 +59,9 @@ fn enclosing_origin(scope: &ScopeRef) -> Option<Rc<ReferenceValue>> {
 
 fn env_scope() -> ScopeRef {
     let scope = Scope::new();
-    scope.insert("true".to_string(), EvalValue::True);
+    scope.insert(Sym::intern("true"), EvalValue::True);
     for bi in std_lib_functions().into_iter() {
-        //ReferenceValue::CallableValue(Callable::Internal(bi)).to_rc()
-        scope.insert(bi.name.to_string(), EvalValue::Reference(ReferenceValue::CallableValue(Callable::Internal(bi)).to_rc()))
+        scope.insert(Sym::intern(bi.name), EvalValue::Reference(ReferenceValue::CallableValue(Callable::Internal(bi)).to_rc()))
     }
     scope
 }
@@ -82,9 +82,11 @@ pub fn eval(ast: &'_ PosExpression, provided_scope: Option<ScopeRef>) -> (EvalRe
 
 pub(crate) fn eval_expression(ctx: EvalContext, scope: &ScopeRef, expression: &'_ PosExpression) -> EvalResult {
     match &expression.exp {
-        SExpression::Symbol(i) => scope.lookup(i).map_or(
-            Err(EvalError::UnknownSymbol(i.clone()).trace(scope)),
-            |v| Ok((v.clone(), EvalContext::none()))
+        // map_or_else: the error (with its stack trace of allocated strings)
+        // must only be built when the lookup actually fails
+        SExpression::Symbol(i) => scope.lookup(*i).map_or_else(
+            || Err(EvalError::UnknownSymbol(*i).trace(scope)),
+            |v| Ok((v, EvalContext::none()))
         ),
         SExpression::Number(i) => Ok((EvalValue::Numeric(i.clone()), EvalContext::none())),
         SExpression::List(expressions) => eval_list(ctx, scope, expressions),
@@ -92,12 +94,12 @@ pub(crate) fn eval_expression(ctx: EvalContext, scope: &ScopeRef, expression: &'
     }
 }
 
-fn populate_scope_with_args(scope: &ScopeRef, values: Vec<EvalValue>, arg_names: &Vec<String>) -> () {
+fn populate_scope_with_args(scope: &ScopeRef, values: Vec<EvalValue>, arg_names: &Vec<Sym>) -> () {
     arg_names.iter()
         .zip(values)
         .for_each(
             |(ident, val)|
-            scope.insert(ident.clone(), val)
+            scope.insert(*ident, val)
         );
 }
 
@@ -112,7 +114,7 @@ fn is_tail_call(ctx: &EvalContext, origin: &Option<Rc<ReferenceValue>>, inside: 
 /// `caller` is the scope the call expression is evaluated in (used to detect a
 /// self tail call), `defining_scope` is the scope the function was created in
 /// (the new frame becomes its child: lexical scoping, closures work).
-pub fn wrap_tail_call(ctx: EvalContext, caller: &ScopeRef, defining_scope: &ScopeRef, passed_in: Vec<EvalValue>, arg_names: &Vec<String>, expression: &PosExpression, origin: Option<Rc<ReferenceValue>>) -> EvalResult {
+pub fn wrap_tail_call(ctx: EvalContext, caller: &ScopeRef, defining_scope: &ScopeRef, passed_in: Vec<EvalValue>, arg_names: &Vec<Sym>, expression: &PosExpression, origin: Option<Rc<ReferenceValue>>) -> EvalResult {
     let tc_detected = is_tail_call(&ctx, &enclosing_origin(caller), &origin);
     if tc_detected{
         let tc: TailCall = TailCall{ function: origin.unwrap().clone(), args: passed_in };
@@ -122,7 +124,7 @@ pub fn wrap_tail_call(ctx: EvalContext, caller: &ScopeRef, defining_scope: &Scop
     }
 }
 
-pub(crate) fn eval_with_args_flat(given_ctx: EvalContext, scope: &ScopeRef, passed_in: Vec<EvalValue>, arg_names: &Vec<String>, expression: &PosExpression, _origin: Option<Rc<ReferenceValue>>) -> EvalResult {
+pub(crate) fn eval_with_args_flat(given_ctx: EvalContext, scope: &ScopeRef, passed_in: Vec<EvalValue>, arg_names: &Vec<Sym>, expression: &PosExpression, _origin: Option<Rc<ReferenceValue>>) -> EvalResult {
     populate_scope_with_args(&scope, passed_in, arg_names);
     let (mut res, mut res_ctx) = eval_expression(
         EvalContext{possible_tail: true}, //there we go, tail recursion
@@ -143,7 +145,7 @@ pub(crate) fn eval_with_args_flat(given_ctx: EvalContext, scope: &ScopeRef, pass
     Ok((res, EvalContext{possible_tail: given_ctx.possible_tail && res_ctx.possible_tail}))
 }
 
-pub(crate) fn eval_with_args(ctx: EvalContext, scope: &ScopeRef, passed_in: Vec<EvalValue>, arg_names: &Vec<String>, expression: &PosExpression, origin: Option<Rc<ReferenceValue>>) -> EvalResult {
+pub(crate) fn eval_with_args(ctx: EvalContext, scope: &ScopeRef, passed_in: Vec<EvalValue>, arg_names: &Vec<Sym>, expression: &PosExpression, origin: Option<Rc<ReferenceValue>>) -> EvalResult {
     let _depth = CallDepthGuard::enter(scope)?;
     let func_scope = scope.enter(origin.clone())?;
     eval_with_args_flat(ctx, &func_scope, passed_in, arg_names, expression, origin)
@@ -173,8 +175,8 @@ pub(crate) fn eval_call_with_values(ctx: EvalContext, scope: &ScopeRef, callable
 pub(crate) fn eval_callable(ctx: EvalContext, scope: &ScopeRef, callable: &Callable, args: &'_ [PosExpression], origin: Option<Rc<ReferenceValue>>) -> EvalResult {
     match callable {
         Callable::Internal(bi) => {
-            let exp_args: Vec<EvalValue> = args.iter().map(|exp| EvalValue::Reference(ReferenceValue::Expression(exp.clone()).to_rc())).collect();
-            (bi.callback)(scope, ctx, BuiltInFunctionArgs::from(exp_args))
+            // arguments are handed over unevaluated, borrowed from the AST
+            (bi.callback)(scope, ctx, BuiltInFunctionArgs::Expressions(args))
         },
         Callable::Function(Function{arguments: _, body: _,..}) =>
             eval_call_with_values(ctx, scope, callable, eval_all(EvalContext::none(), scope, args)?, origin),

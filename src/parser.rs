@@ -2,6 +2,7 @@ use crate::ast;
 use crate::lexer::{Cursor, Token, TokenValue};
 use crate::ast::{PosExpression, SExpression};
 use crate::lexer::TokenStream;
+use crate::symbol::Sym;
 
 #[derive(Debug)]
 pub enum ParserError{
@@ -46,7 +47,7 @@ fn parse_atomic(stream: &mut TokenStream) -> ParserResult{
     let stream = stream;
     match stream.next_if(|token| matches!(token.value, TokenValue::NumericToken(_)) ||matches!(token.value, TokenValue::Identifier(_))) {
         Some(Token {value: TokenValue::Identifier(ident), cursor}) => {
-            Ok(Some(PosExpression{cursor, exp: SExpression::Symbol(ident)}))
+            Ok(Some(PosExpression{cursor, exp: SExpression::Symbol(Sym::intern(&ident))}))
         },
         Some(Token{value: TokenValue::NumericToken(i), cursor}) => {
             Ok(Some(PosExpression{cursor, exp: SExpression::Number(i)}))

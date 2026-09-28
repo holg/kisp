@@ -91,13 +91,20 @@ fn lexical_scoping(){
 
 #[test]
 fn deep_recursion_is_an_error_not_a_crash(){
-    let res = quick_result(
-        "
-        (fn r [n] (if (= n 0) 0 (+ 1 (r (- n 1)))))
-        (r 100000)
-        "
-    );
-    assert!(res.is_err());
+    // Test threads get 2 MiB of stack; MAX_CALL_DEPTH nested calls in a debug
+    // build need more, so run on a thread sized like the main thread (8 MiB).
+    let is_err = std::thread::Builder::new()
+        .stack_size(8 * 1024 * 1024)
+        .spawn(|| quick_result(
+            "
+            (fn r [n] (if (= n 0) 0 (+ 1 (r (- n 1)))))
+            (r 100000)
+            "
+        ).is_err())
+        .unwrap()
+        .join()
+        .unwrap();
+    assert!(is_err);
 }
 
 #[test]

@@ -30,20 +30,20 @@ fn nth_callback(scope: &ScopeRef, _ctx: EvalContext, args: BuiltInFunctionArgs<'
 }
 
 
-fn car_callback(scope: &ScopeRef, _ctx: EvalContext, args:  BuiltInFunctionArgs) -> EvalResult {
+fn car_callback(scope: &ScopeRef, _ctx: EvalContext, args: BuiltInFunctionArgs<'_>) -> EvalResult {
     let (arg_value, _ )  = args.try_pos(scope, 0)?.evaluated(scope)?;
     let list = expect_ref_type!(arg_value, ReferenceValue::List(v) => v, scope)?;
     Ok((wrap_opt_to_unit(list.head()), EvalContext::none()))
 }
 
-fn cdr_callback(scope: &ScopeRef, _ctx: EvalContext, args:  BuiltInFunctionArgs) -> EvalResult {
+fn cdr_callback(scope: &ScopeRef, _ctx: EvalContext, args: BuiltInFunctionArgs<'_>) -> EvalResult {
     let (arg_value, _ )  = args.try_pos(scope, 0)?.evaluated(scope)?;
     let list = expect_ref_type!(arg_value, ReferenceValue::List(l) => l, scope)?;
     Ok((EvalValue::Reference(ReferenceValue::List(list.tail()).to_rc()), EvalContext::none()))
 }
 
 
-fn cons_callback(scope: &ScopeRef, _ctx: EvalContext, args:  BuiltInFunctionArgs) -> EvalResult {
+fn cons_callback(scope: &ScopeRef, _ctx: EvalContext, args: BuiltInFunctionArgs<'_>) -> EvalResult {
     let (arg_value, _ )  = args.try_pos(scope, 1)?.evaluated(scope)?;
     let list = expect_ref_type!(arg_value, ReferenceValue::List(l) => l, scope)?;
     let (con_value, _ )  = args.try_pos(scope, 0)?.evaluated(scope)?;
